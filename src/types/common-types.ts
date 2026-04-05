@@ -6,3 +6,13 @@ export type ApiResponse<T> = {
   code?: number;
   timestamp?: string;
 };
+
+export interface Statistics {
+  totalYearsOfExperience: number;
+  totalUsers: number;
+  totalClients: number;
+  totalProjects: number;
+  totalTeamMembers: number;
+}
+
+export type StatisticsApiResponse = ApiResponse<Statistics>;
