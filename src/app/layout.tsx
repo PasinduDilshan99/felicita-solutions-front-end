@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import ThemePicker from "@/components/common-components/ThemePicker";
 import NavBar from "@/components/common-components/nav-bar/NavBar";
 import Footer from "@/components/common-components/footer/Footer";
+import ChatBot from "@/components/common-components/ChatBot";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -18,11 +19,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="min-h-screen" >
         <AuthProvider>
           <ThemeProvider>
             <ThemePicker />
             <NavBar />
+            <ChatBot/>
             {children}
             <Footer />
           </ThemeProvider>

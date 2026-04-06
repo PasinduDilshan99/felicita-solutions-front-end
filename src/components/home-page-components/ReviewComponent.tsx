@@ -1,6 +1,6 @@
 // components/home-page-components/ReviewComponent.tsx
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { ProjectService } from "@/services/projectService";
 import { ProjectReview } from "@/types/project-types";
@@ -19,8 +19,20 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [hoveredReview, setHoveredReview] = useState<number | null>(null);
   const [slidesToShow, setSlidesToShow] = useState(3);
+  const [sectionVisible, setSectionVisible] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [headerAnimation, setHeaderAnimation] = useState({
+    badge: false,
+    title: false,
+    divider: false,
+  });
+  const [reviewAnimations, setReviewAnimations] = useState<{ [key: number]: boolean }>({});
+  const sectionRef = useRef<HTMLElement>(null);
 
+  // Fetch reviews only when section becomes visible
   useEffect(() => {
+    if (!sectionVisible || hasLoaded) return;
+
     const fetchReviews = async () => {
       try {
         const { data, error } = await ProjectService.fetchProjectReviewsData();
@@ -28,6 +40,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
           setError(error);
         } else if (data && data.length > 0) {
           setReviews(data);
+          setHasLoaded(true);
         } else {
           // Fallback data
           setReviews([
@@ -87,6 +100,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
               productionUrl: "",
             },
           ]);
+          setHasLoaded(true);
         }
       } catch (err) {
         console.error("Error fetching reviews:", err);
@@ -97,7 +111,60 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
     };
 
     fetchReviews();
-  }, []);
+  }, [sectionVisible, hasLoaded]);
+
+  // Intersection Observer for section visibility
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !sectionVisible) {
+            setSectionVisible(true);
+          }
+        });
+      },
+      { 
+        threshold: 0.1,
+        rootMargin: "0px 0px -100px 0px"
+      }
+    );
+
+    const currentSection = sectionRef.current;
+    if (currentSection) {
+      observer.observe(currentSection);
+    }
+
+    return () => {
+      if (currentSection) {
+        observer.unobserve(currentSection);
+      }
+    };
+  }, [sectionVisible]);
+
+  // Trigger animations when reviews are loaded
+  useEffect(() => {
+    if (!loading && reviews.length > 0 && sectionVisible) {
+      // Trigger header animations
+      setTimeout(() => {
+        setHeaderAnimation(prev => ({ ...prev, badge: true }));
+      }, 100);
+      
+      setTimeout(() => {
+        setHeaderAnimation(prev => ({ ...prev, title: true }));
+      }, 300);
+      
+      setTimeout(() => {
+        setHeaderAnimation(prev => ({ ...prev, divider: true }));
+      }, 500);
+      
+      // Trigger review card animations with stagger effect
+      reviews.forEach((_, index) => {
+        setTimeout(() => {
+          setReviewAnimations(prev => ({ ...prev, [index]: true }));
+        }, 600 + index * 100);
+      });
+    }
+  }, [loading, reviews, sectionVisible]);
 
   // Handle responsive slides to show
   useEffect(() => {
@@ -119,14 +186,14 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
 
   // Auto-rotate reviews for carousel mode
   useEffect(() => {
-    if (!isAutoPlaying || viewMode !== "carousel" || reviews.length <= slidesToShow) return;
+    if (!isAutoPlaying || viewMode !== "carousel" || reviews.length <= slidesToShow || !sectionVisible) return;
 
     const interval = setInterval(() => {
       nextSlide();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isAutoPlaying, viewMode, reviews.length, slidesToShow]);
+  }, [isAutoPlaying, viewMode, reviews.length, slidesToShow, sectionVisible]);
 
   const nextSlide = () => {
     setIsAutoPlaying(true);
@@ -159,12 +226,40 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
     }
   };
 
+  // Don't render content until section is visible
+  if (!sectionVisible) {
+    return (
+      <section 
+        ref={sectionRef}
+        className="w-full py-20 px-4 relative min-h-[600px] overflow-hidden"
+        style={{
+          background: `linear-gradient(135deg, ${theme.background} 0%, ${theme.surface} 100%)`,
+        }}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-center h-full min-h-[500px]">
+          <div className="text-center">
+            <div className="inline-block">
+              <div 
+                className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: `${theme.primary} transparent ${theme.primary} transparent` }}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (loading) {
-    return ;
+    return (
+      <section ref={sectionRef} className="w-full py-20 px-4 overflow-hidden">
+        <ReviewSkeleton viewMode={viewMode} />
+      </section>
+    );
   }
 
   if (error || reviews.length === 0) {
-    return <ReviewError />;
+    return <ReviewError sectionRef={sectionRef} />;
   }
 
   // Get initials for avatar
@@ -184,7 +279,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
         {[1, 2, 3, 4, 5].map((star) => (
           <svg
             key={star}
-            className="w-4 h-4"
+            className="w-4 h-4 transition-all duration-300 hover:scale-110"
             fill={star <= rating ? "#fbbf24" : `${theme.textSecondary}30`}
             stroke={star <= rating ? "#fbbf24" : "none"}
             viewBox="0 0 24 24"
@@ -205,12 +300,19 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
   const renderReviewCard = (review: ProjectReview, index: number) => (
     <div
       key={review.reviewId}
-      className="group h-full px-2"
+      className={`group h-full px-2 transform transition-all duration-700 ${
+        reviewAnimations[index]
+          ? "translate-y-0 opacity-100"
+          : "translate-y-full opacity-0"
+      }`}
+      style={{
+        transitionDelay: `${600 + index * 100}ms`,
+      }}
       onMouseEnter={() => setHoveredReview(review.reviewId)}
       onMouseLeave={() => setHoveredReview(null)}
     >
       <div
-        className="relative p-6 rounded-2xl transition-all duration-500 h-full flex flex-col"
+        className="relative p-6 rounded-2xl transition-all duration-500 h-full flex flex-col overflow-hidden"
         style={{
           backgroundColor:
             hoveredReview === review.reviewId
@@ -221,14 +323,25 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
           }`,
           boxShadow:
             hoveredReview === review.reviewId
-              ? `0 20px 40px -12px ${theme.primary}30`
+              ? `0 20px 40px -12px ${theme.primary}40`
               : "0 10px 30px -15px rgba(0, 0, 0, 0.1)",
-          transform: hoveredReview === review.reviewId ? "translateY(-4px)" : "translateY(0)",
+          transform: hoveredReview === review.reviewId ? "translateY(-8px)" : "translateY(0)",
         }}
       >
+        {/* Shimmer effect on hover */}
+        {hoveredReview === review.reviewId && (
+          <div 
+            className="absolute inset-0 pointer-events-none overflow-hidden"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${theme.primary}10, transparent)`,
+              animation: "shimmer 2s infinite",
+            }}
+          />
+        )}
+
         {/* Quote Icon */}
         <div
-          className="absolute top-4 right-4 opacity-10 transition-opacity group-hover:opacity-20"
+          className="absolute top-4 right-4 opacity-10 transition-all duration-500 group-hover:opacity-20 group-hover:scale-110"
           style={{ color: theme.primary }}
         >
           <svg
@@ -245,20 +358,24 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
 
         {/* Review Text */}
         <p
-          className="text-base leading-relaxed mb-6 flex-grow"
-          style={{ color: theme.textSecondary }}
+          className="text-base leading-relaxed mb-6 flex-grow transition-all duration-300"
+          style={{ 
+            color: theme.textSecondary,
+            transform: hoveredReview === review.reviewId ? "translateX(4px)" : "translateX(0)",
+          }}
         >
           &ldquo;{review.reviewText}&rdquo;
         </p>
 
         {/* Separator Line */}
         <div
-          className="w-full h-px my-4 transition-all duration-300"
+          className="w-full h-px my-4 transition-all duration-500"
           style={{
             backgroundColor:
               hoveredReview === review.reviewId
-                ? `${theme.primary}30`
+                ? `${theme.primary}40`
                 : `${theme.border}`,
+            transform: hoveredReview === review.reviewId ? "scaleX(1.1)" : "scaleX(1)",
           }}
         />
 
@@ -266,7 +383,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
         <div className="flex items-center gap-3">
           {/* Avatar */}
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden flex-shrink-0"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden flex-shrink-0 transition-all duration-300 group-hover:scale-110"
             style={{ backgroundColor: theme.primary }}
           >
             {review.userImage ? (
@@ -282,14 +399,20 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
 
           <div className="flex-1 min-w-0">
             <h4
-              className="font-semibold text-base mb-0.5 truncate"
-              style={{ color: theme.text }}
+              className="font-semibold text-base mb-0.5 truncate transition-all duration-300"
+              style={{ 
+                color: theme.text,
+                transform: hoveredReview === review.reviewId ? "translateX(2px)" : "translateX(0)",
+              }}
             >
               {review.username}
             </h4>
             <p
-              className="text-xs truncate"
-              style={{ color: theme.primary }}
+              className="text-xs truncate transition-all duration-300"
+              style={{ 
+                color: theme.primary,
+                transform: hoveredReview === review.reviewId ? "translateX(2px)" : "translateX(0)",
+              }}
             >
               {review.companyName}
             </p>
@@ -309,6 +432,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
 
     return (
       <section
+        ref={sectionRef}
         className="w-full py-20 px-4 relative overflow-hidden"
         style={{
           background: `linear-gradient(135deg, ${theme.background} 0%, ${theme.surface} 100%)`,
@@ -318,12 +442,13 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
       >
         {/* Decorative Background Elements */}
         <div
-          className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+          className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10 animate-pulse-slow"
           style={{ backgroundColor: theme.primary }}
         />
         <div
-          className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+          className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10 animate-pulse-slow"
           style={{ backgroundColor: theme.secondary }}
+          style={{ animationDelay: "1s" }}
         />
 
         <div className="max-w-7xl mx-auto relative z-10">
@@ -331,7 +456,11 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
           <div className="text-center mb-12">
             <div className="inline-block mb-4">
               <span
-                className="text-sm font-semibold uppercase tracking-wider px-4 py-2 rounded-full"
+                className={`text-sm font-semibold uppercase tracking-wider px-4 py-2 rounded-full transform transition-all duration-700 ${
+                  headerAnimation.badge
+                    ? "translate-y-0 opacity-100 scale-100"
+                    : "-translate-y-full opacity-0 scale-95"
+                }`}
                 style={{
                   backgroundColor: `${theme.primary}10`,
                   color: theme.primary,
@@ -342,13 +471,21 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
               </span>
             </div>
             <h2
-              className="text-4xl md:text-5xl font-bold mb-4"
+              className={`text-4xl md:text-5xl font-bold mb-4 transform transition-all duration-700 delay-200 ${
+                headerAnimation.title
+                  ? "translate-y-0 opacity-100"
+                  : "-translate-y-full opacity-0"
+              }`}
               style={{ color: theme.text }}
             >
               What our clients thinks
             </h2>
             <div
-              className="w-20 h-1 rounded-full mx-auto"
+              className={`w-20 h-1 rounded-full mx-auto transform transition-all duration-700 delay-400 ${
+                headerAnimation.divider
+                  ? "scale-x-100 opacity-100"
+                  : "scale-x-0 opacity-0"
+              }`}
               style={{ backgroundColor: theme.primary }}
             />
           </div>
@@ -360,7 +497,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
               <>
                 <button
                   onClick={prevSlide}
-                  className="absolute -left-4 md:-left-6 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all duration-300 hover:scale-110"
+                  className="absolute -left-4 md:-left-6 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all duration-300 hover:scale-110 group"
                   style={{
                     backgroundColor: `${theme.primary}10`,
                     color: theme.primary,
@@ -375,14 +512,14 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
                     e.currentTarget.style.color = theme.primary;
                   }}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
 
                 <button
                   onClick={nextSlide}
-                  className="absolute -right-4 md:-right-6 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all duration-300 hover:scale-110"
+                  className="absolute -right-4 md:-right-6 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full transition-all duration-300 hover:scale-110 group"
                   style={{
                     backgroundColor: `${theme.primary}10`,
                     color: theme.primary,
@@ -397,7 +534,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
                     e.currentTarget.style.color = theme.primary;
                   }}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -407,7 +544,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
             {/* Carousel Slides */}
             <div className="overflow-hidden">
               <div
-                className="flex transition-transform duration-500 ease-out"
+                className="flex transition-transform duration-700 ease-out"
                 style={{
                   transform: `translateX(-${currentIndex * (100 / slidesToShow)}%)`,
                 }}
@@ -432,7 +569,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
                 <button
                   key={idx}
                   onClick={() => goToSlide(idx * slidesToShow)}
-                  className="transition-all duration-300"
+                  className="transition-all duration-300 hover:scale-110"
                   style={{
                     width: Math.floor(currentIndex / slidesToShow) === idx ? "32px" : "8px",
                     height: "8px",
@@ -448,6 +585,30 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
             </div>
           )}
         </div>
+
+        <style jsx>{`
+          @keyframes pulse-slow {
+            0%, 100% {
+              opacity: 0.1;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 0.2;
+              transform: scale(1.1);
+            }
+          }
+          @keyframes shimmer {
+            0% {
+              transform: translateX(-100%);
+            }
+            100% {
+              transform: translateX(100%);
+            }
+          }
+          .animate-pulse-slow {
+            animation: pulse-slow 4s ease-in-out infinite;
+          }
+        `}</style>
       </section>
     );
   }
@@ -455,6 +616,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
   // Grid Mode
   return (
     <section
+      ref={sectionRef}
       className="w-full py-20 px-4 relative overflow-hidden"
       style={{
         background: `linear-gradient(135deg, ${theme.background} 0%, ${theme.surface} 100%)`,
@@ -462,12 +624,13 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
     >
       {/* Decorative Background Elements */}
       <div
-        className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+        className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10 animate-pulse-slow"
         style={{ backgroundColor: theme.primary }}
       />
       <div
-        className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+        className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10 animate-pulse-slow"
         style={{ backgroundColor: theme.secondary }}
+        style={{ animationDelay: "1s" }}
       />
 
       <div className="max-w-7xl mx-auto relative z-10">
@@ -475,7 +638,11 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
         <div className="text-center mb-12">
           <div className="inline-block mb-4">
             <span
-              className="text-sm font-semibold uppercase tracking-wider px-4 py-2 rounded-full"
+              className={`text-sm font-semibold uppercase tracking-wider px-4 py-2 rounded-full transform transition-all duration-700 ${
+                headerAnimation.badge
+                  ? "translate-y-0 opacity-100 scale-100"
+                  : "-translate-y-full opacity-0 scale-95"
+              }`}
               style={{
                 backgroundColor: `${theme.primary}10`,
                 color: theme.primary,
@@ -486,18 +653,26 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
             </span>
           </div>
           <h2
-            className="text-4xl md:text-5xl font-bold mb-4"
+            className={`text-4xl md:text-5xl font-bold mb-4 transform transition-all duration-700 delay-200 ${
+              headerAnimation.title
+                ? "translate-y-0 opacity-100"
+                : "-translate-y-full opacity-0"
+            }`}
             style={{ color: theme.text }}
           >
             What our clients thinks
           </h2>
           <div
-            className="w-20 h-1 rounded-full mx-auto"
+            className={`w-20 h-1 rounded-full mx-auto transform transition-all duration-700 delay-400 ${
+              headerAnimation.divider
+                ? "scale-x-100 opacity-100"
+                : "scale-x-0 opacity-0"
+            }`}
             style={{ backgroundColor: theme.primary }}
           />
         </div>
 
-        {/* Reviews Grid - Horizontal Layout */}
+        {/* Reviews Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
           {reviews.map((review, index) => renderReviewCard(review, index))}
         </div>
@@ -505,7 +680,7 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
         {/* Bottom Navigation Hint */}
         <div className="text-center mt-12">
           <p
-            className="text-sm"
+            className="text-sm transition-all duration-300 hover:translate-y-1"
             style={{ color: theme.textSecondary }}
           >
             Trusted by industry leaders worldwide
@@ -513,37 +688,106 @@ const ReviewComponent: React.FC<ReviewComponentProps> = ({ viewMode = "carousel"
         </div>
       </div>
 
-      {/* Add animations */}
       <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 0.1;
+            transform: scale(1);
           }
-          to {
-            opacity: 1;
-            transform: translateY(0);
+          50% {
+            opacity: 0.2;
+            transform: scale(1.1);
           }
         }
-        
-        .group {
-          animation: fadeInUp 0.6s ease-out forwards;
-          opacity: 0;
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 4s ease-in-out infinite;
         }
       `}</style>
     </section>
   );
 };
 
+// Skeleton Loader Component
+const ReviewSkeleton = ({ viewMode }: { viewMode: string }) => {
+  const { theme } = useTheme();
+  const skeletonCount = viewMode === "carousel" ? 3 : 6;
+  
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="text-center mb-12">
+        <div 
+          className="h-8 w-48 mx-auto rounded-lg mb-4 animate-shimmer"
+          style={{ backgroundColor: `${theme.primary}20` }}
+        />
+        <div 
+          className="h-12 w-96 mx-auto rounded-lg mb-4 animate-shimmer"
+          style={{ backgroundColor: `${theme.text}20` }}
+        />
+        <div 
+          className="w-20 h-1 rounded-full mx-auto animate-shimmer"
+          style={{ backgroundColor: `${theme.primary}30` }}
+        />
+      </div>
+      <div className={`grid ${viewMode === "carousel" ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+        {Array.from({ length: skeletonCount }).map((_, i) => (
+          <div key={i} className="p-6 rounded-2xl animate-shimmer" style={{ backgroundColor: `${theme.primary}05`, border: `1px solid ${theme.border}` }}>
+            <div className="w-24 h-4 rounded mb-4" style={{ backgroundColor: `${theme.textSecondary}20` }} />
+            <div className="space-y-2 mb-6">
+              <div className="h-4 w-full rounded" style={{ backgroundColor: `${theme.textSecondary}20` }} />
+              <div className="h-4 w-11/12 rounded" style={{ backgroundColor: `${theme.textSecondary}20` }} />
+              <div className="h-4 w-10/12 rounded" style={{ backgroundColor: `${theme.textSecondary}20` }} />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full" style={{ backgroundColor: `${theme.primary}30` }} />
+              <div className="flex-1">
+                <div className="h-4 w-24 rounded mb-1" style={{ backgroundColor: `${theme.text}20` }} />
+                <div className="h-3 w-16 rounded" style={{ backgroundColor: `${theme.primary}20` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <style jsx>{`
+        @keyframes shimmer {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+        .animate-shimmer {
+          background: linear-gradient(
+            90deg,
+            rgba(55, 65, 81, 0.2) 0%,
+            rgba(75, 85, 99, 0.4) 50%,
+            rgba(55, 65, 81, 0.2) 100%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // Error Component
-const ReviewError = () => {
+const ReviewError = ({ sectionRef }: { sectionRef: React.RefObject<HTMLElement> }) => {
   const { theme } = useTheme();
 
   return (
-    <section className="w-full py-20 px-4">
-      <div className="max-w-7xl mx-auto text-center">
+    <section ref={sectionRef} className="w-full py-20 px-4">
+      <div className="max-w-7xl mx-auto text-center animate-fade-in">
         <div
-          className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
+          className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 animate-bounce-slow"
           style={{ backgroundColor: `${theme.error}10` }}
         >
           <svg
@@ -574,6 +818,18 @@ const ReviewError = () => {
         </h3>
         <p style={{ color: theme.textSecondary }}>Please try again later</p>
       </div>
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .animate-fade-in { animation: fade-in 0.6s ease-out; }
+        .animate-bounce-slow { animation: bounce-slow 2s ease-in-out infinite; }
+      `}</style>
     </section>
   );
 };
