@@ -6,6 +6,7 @@ import ThemePicker from "@/components/common-components/ThemePicker";
 import NavBar from "@/components/common-components/nav-bar/NavBar";
 import Footer from "@/components/common-components/footer/Footer";
 import ChatBot from "@/components/common-components/ChatBot";
+import GlobalGradientScrollbar from "@/components/common-components/GlobalGradientScrollbar";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -22,6 +23,7 @@ export default function RootLayout({
       <body className="min-h-screen" >
         <AuthProvider>
           <ThemeProvider>
+            <GlobalGradientScrollbar/>
             <ThemePicker />
             <NavBar />
             <ChatBot/>

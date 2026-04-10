@@ -29,3 +29,31 @@ export interface HeroApiResponse {
   data: HeroSection[];
   timestamp: string;
 }
+
+// Common interface for all page hero sections
+export interface PageHeroSection {
+  id: number;
+  name: string;
+  imageUrl: string;
+  iconUrl: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  highlightText: string;
+  primaryButtonText: string;
+  primaryButtonLink: string;
+  secondaryButtonText: string;
+  secondaryButtonLink: string;
+  displayOrder: number;
+  statusName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PageHeroApiResponse {
+  code: number;
+  status: string;
+  message: string;
+  data: PageHeroSection[];
+  timestamp: string;
+}
