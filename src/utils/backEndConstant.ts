@@ -77,6 +77,8 @@ export const GET_SERVICE_DETAILS_BY_ID_DATA = `${BASE_PATH}${API}${VERSION}${SER
 
 // Contact Us
 export const ADD_CONTACT_REQUEST_DATA = `${BASE_PATH}${API}${VERSION}${CONTACT_US}/request`;
+export const GET_CONTACT_METHODS_DATA = `${BASE_PATH}${API}${VERSION}${CONTACT_US}/contact-methods`;
+export const GET_SOCIAL_MEDIA_DATA = `${BASE_PATH}${API}${VERSION}${CONTACT_US}/social-media`;
 
 // Projects
 export const GET_PROJECTS_CLIENTS_DATA = `${BASE_PATH}${API}${VERSION}${PROJECTS}/clients`;

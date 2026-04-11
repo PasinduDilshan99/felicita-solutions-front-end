@@ -4,8 +4,16 @@ import {
   ContactUsApiResponse,
   ContactUsRequest,
   ContactUsResponse,
+  ContactMethod,
+  ContactMethodApiResponse,
+  SocialMedia,
+  SocialMediaApiResponse,
 } from "@/types/contact-us-types";
-import { ADD_CONTACT_REQUEST_DATA_FE } from "@/utils/frontEndConstant";
+import {
+  ADD_CONTACT_REQUEST_DATA_FE,
+  GET_CONTACT_METHODS_DATA_FE,
+  GET_SOCIAL_MEDIA_DATA_FE,
+} from "@/utils/frontEndConstant";
 
 export class ContactUsService {
   static async submitContactRequest(request: ContactUsRequest): Promise<{
@@ -38,6 +46,72 @@ export class ContactUsService {
       return {
         data: null,
         error: "Something went wrong while submitting contact request",
+      };
+    }
+  }
+
+  static async fetchContactMethodsData(): Promise<{
+    data: ContactMethod[];
+    error: string | null;
+  }> {
+    try {
+      const response = await fetch(GET_CONTACT_METHODS_DATA_FE);
+      const data: ContactMethodApiResponse = await response.json();
+
+      if (response.ok && data.code === 200) {
+        // Sort by displayOrder
+        const sortedData = (data.data || []).sort(
+          (a, b) => a.displayOrder - b.displayOrder,
+        );
+
+        return {
+          data: sortedData,
+          error: null,
+        };
+      } else {
+        return {
+          data: [],
+          error: data.message || "Failed to fetch contact methods data",
+        };
+      }
+    } catch (err) {
+      console.error("Error fetching contact methods data:", err);
+      return {
+        data: [],
+        error: "Something went wrong while fetching contact methods data",
+      };
+    }
+  }
+
+  static async fetchSocialMediaData(): Promise<{
+    data: SocialMedia[];
+    error: string | null;
+  }> {
+    try {
+      const response = await fetch(GET_SOCIAL_MEDIA_DATA_FE);
+      const data: SocialMediaApiResponse = await response.json();
+
+      if (response.ok && data.code === 200) {
+        // Sort by displayOrder
+        const sortedData = (data.data || []).sort(
+          (a, b) => a.displayOrder - b.displayOrder,
+        );
+
+        return {
+          data: sortedData,
+          error: null,
+        };
+      } else {
+        return {
+          data: [],
+          error: data.message || "Failed to fetch social media data",
+        };
+      }
+    } catch (err) {
+      console.error("Error fetching social media data:", err);
+      return {
+        data: [],
+        error: "Something went wrong while fetching social media data",
       };
     }
   }

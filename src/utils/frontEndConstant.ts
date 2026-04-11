@@ -51,6 +51,8 @@ export const GET_SERVICE_DETAILS_BY_ID_DATA_FE = `${API}${SERVICES}/details-by-i
 
 // Contact Us
 export const ADD_CONTACT_REQUEST_DATA_FE = `${API}${CONTACT_US}/request`;
+export const GET_CONTACT_METHODS_DATA_FE = `${API}${CONTACT_US}/contact-methods`;
+export const GET_SOCIAL_MEDIA_DATA_FE = `${API}${CONTACT_US}/social-media`;
 
 // Projects
 export const GET_PROJECTS_CLIENTS_DATA_FE = `${API}${PROJECTS}/clients`;
